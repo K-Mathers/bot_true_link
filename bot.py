@@ -1,8 +1,8 @@
 import asyncio
 import logging
-import os
+import os 
 from aiogram import Bot, Dispatcher
-from aiohttp import web 
+from aiohttp import web
 from config import BOT_TOKEN
 from app.main_commands import router as commands_router
 from app.services.marzban_api import marzban_client
@@ -20,7 +20,7 @@ async def health_check(request):
 async def start_web_server():
     app = web.Application()
     app.add_routes([web.get('/health', health_check)]) 
-    
+
     port = int(os.environ.get("PORT", 8080)) 
     host = '0.0.0.0'
 
@@ -31,23 +31,38 @@ async def start_web_server():
     logging.info(f"🌐 Web Server запущен на {host}:{port} для Health Check.")
     await site.start()
 
+    while True:
+        await asyncio.sleep(3600)
+
+async def run_bot_tasks(bot: Bot):
+    logging.info("⏳ Запуск инициализации сервисов (Marzban, DB)...")
+    
+    try:
+        await marzban_client.initialize()
+        await init_db() 
+        logging.info("✅ Инициализация Marzban и БД завершена.")
+    except Exception as e:
+        logging.error(f"❌ Критическая ошибка инициализации: {e}. Проверьте ENV VARIABLES!")
+        return
+    asyncio.create_task(check_crypto_payments(bot)) 
+    logging.info("✅ Фоновая задача проверки платежей запущена.")
+    logging.info("🚀 Бот запускает Long Polling...")
+    await dp.start_polling(bot)
+
+
 async def main():
     if not BOT_TOKEN:
         logging.error("BOT_TOKEN не установлен. Завершение.")
         return
-    
-    await marzban_client.initialize()
-    await init_db() 
 
     bot = Bot(token=BOT_TOKEN)
-    logging.info("🚀 Бот запущен...")
-    asyncio.create_task(check_crypto_payments(bot)) 
-    logging.info("✅ Фоновая задача проверки платежей запущена.")
-    polling_task = asyncio.create_task(dp.start_polling(bot))
-    await start_web_server()
-    await polling_task 
+    web_server_task = asyncio.create_task(start_web_server())
+    polling_task = asyncio.create_task(run_bot_tasks(bot))
+    await asyncio.gather(web_server_task, polling_task)
+
 
 async def shutdown(bot, marzban_client):
+    """Обеспечивает корректное закрытие сессий при завершении процесса."""
     logging.info("🛑 Получен сигнал завершения. Закрытие ресурсов...")
     try:
         await marzban_client.close() 
