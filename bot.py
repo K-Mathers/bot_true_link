@@ -6,8 +6,8 @@ from aiohttp import web
 from config import BOT_TOKEN
 from app.main_commands import router as commands_router
 from app.services.marzban_api import marzban_client
-from app.handlers.buy import check_crypto_payments
 from app.db.database import init_db 
+
 logging.basicConfig(level=logging.INFO)
 
 dp = Dispatcher()
@@ -46,7 +46,6 @@ async def shutdown(bot: Bot):
 
 
 async def run_bot_tasks(bot: Bot):
-    """Выполняет всю инициализацию и запускает Long Polling."""
     logging.info("⏳ Запуск инициализации сервисов (Marzban, DB)...")
     
     try:
@@ -57,15 +56,13 @@ async def run_bot_tasks(bot: Bot):
         logging.error(f"❌ Критическая ошибка инициализации: {e}. Проверьте ENV VARIABLES!")
         return
     
-    asyncio.create_task(check_crypto_payments(bot)) 
-    logging.info("✅ Фоновая задача проверки платежей запущена.")
     logging.info("🚀 Бот запускает Long Polling...")
     await dp.start_polling(bot)
 
 
 async def main():
     if not BOT_TOKEN:
-        logging.error("BOT_TOKEN не установлен. Завершение.")
+        logging.error("BOT_TOKEN не установлен.")
         return
 
     bot = Bot(token=BOT_TOKEN)
@@ -85,6 +82,6 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logging.info("Bot stopped by KeyboardInterrupt (Local).")
+        logging.info("Bot stopped")
     except Exception as e:
-        logging.error(f"Непредвиденная ошибка при выполнении main: {e}")
+        logging.error(f"Error {e}")
